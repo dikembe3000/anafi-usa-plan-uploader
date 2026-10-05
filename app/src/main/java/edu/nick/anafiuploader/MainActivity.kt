@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
         findViewById<Button>(R.id.selectButton).setOnClickListener { chooseFile.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
-        uploadButton.setOnClickListener { selectedPlan?.let { fflightPlan?.uploadFlightPlan(it) } }
+        uploadButton.setOnClickListener { selectedPlan?.let { flightPlan?.uploadFlightPlan(it) } }
         startButton.setOnClickListener { flightPlan?.activate(FlightPlanPilotingItf.Interpreter.LEGACY, true) }
         stopButton.setOnClickListener { flightPlan?.stop() }
         groundSdk = ManagedGroundSdk.obtainSession(this)
