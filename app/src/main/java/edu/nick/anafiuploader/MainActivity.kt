@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var groundSdk: GroundSdk
     private var drone: Drone? = null
     private var flightPlanRef: Ref<FlightPlanPilotingItf>? = null
+    private var flightPlan: FlightPlanPilotingItf? = null
     private var selectedPlan: File? = null
     private lateinit var connectionStatus: TextView
     private lateinit var planStatus: TextView
@@ -39,9 +40,9 @@ class MainActivity : AppCompatActivity() {
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
         findViewById<Button>(R.id.selectButton).setOnClickListener { chooseFile.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
-        uploadButton.setOnClickListener { selectedPlan?.let { flightPlanRef?.value?.uploadFlightPlan(it) } }
-        startButton.setOnClickListener { flightPlanRef?.value?.activate(FlightPlanPilotingItf.Interpreter.LEGACY, true) }
-        stopButton.setOnClickListener { flightPlanRef?.value?.stop() }
+        uploadButton.setOnClickListener { selectedPlan?.let { fflightPlan?.uploadFlightPlan(it) } }
+        startButton.setOnClickListener { flightPlan?.activate(FlightPlanPilotingItf.Interpreter.LEGACY, true) }
+        stopButton.setOnClickListener { flightPlan?.stop() }
         groundSdk = ManagedGroundSdk.obtainSession(this)
     }
 
@@ -61,6 +62,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun monitorFlightPlan() {
         flightPlanRef = drone?.getPilotingItf(FlightPlanPilotingItf::class.java) { plan ->
+            flightPlan = plan
             if (plan == null) {
                 planStatus.text = "FlightPlan unavailable"
                 uploadButton.isEnabled = false
@@ -82,7 +84,7 @@ class MainActivity : AppCompatActivity() {
                 destination.outputStream().use { input.copyTo(it) }
                 selectedPlan = destination
                 planStatus.text = "Selected: ${uri.lastPathSegment ?: "MAVLink plan"}"
-                uploadButton.isEnabled = flightPlanRef?.value != null
+                uploadButton.isEnabled = flightPlan != null
             }
         } catch (error: Exception) {
             planStatus.text = "Could not read file: ${error.message}"
@@ -92,6 +94,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         flightPlanRef?.close()
         flightPlanRef = null
+        flightPlan = null
         super.onStop()
     }
 }
