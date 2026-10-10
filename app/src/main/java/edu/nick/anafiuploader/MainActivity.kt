@@ -21,7 +21,7 @@ import com.parrot.drone.groundsdk.device.Drone
 import com.parrot.drone.groundsdk.device.pilotingitf.FlightPlanPilotingItf
 import com.parrot.drone.groundsdk.facility.AutoConnection
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.views.MapView
@@ -80,7 +80,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMap() {
-        map.setTileSource(XYTileSource("Esri World Imagery", 1, 19, 256, ".jpg", arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/")))
+        map.setTileSource(TileSourceFactory.MAPNIK)
         map.setMultiTouchControls(true)
         route = Polyline().apply { outlinePaint.color = Color.rgb(103, 58, 183); outlinePaint.strokeWidth = 7f }
         map.overlays.add(route)
