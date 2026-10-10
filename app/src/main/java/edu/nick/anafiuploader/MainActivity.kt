@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
@@ -20,10 +23,11 @@ import com.parrot.drone.groundsdk.facility.AutoConnection
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -33,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private var flightPlan: FlightPlanPilotingItf? = null
     private var selectedPlan: File? = null
     private lateinit var connectionStatus: TextView
+    private lateinit var internetStatus: TextView
     private lateinit var selectionStatus: TextView
     private lateinit var planStatus: TextView
     private lateinit var uploadButton: Button
@@ -40,6 +45,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var stopButton: Button
     private lateinit var map: MapView
     private lateinit var route: Polyline
+    private var networkCallbackRegistered = false
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            runOnUiThread { updateInternetStatus() }
+        }
+        override fun onLost(network: Network) {
+            runOnUiThread { updateInternetStatus() }
+        }
+    }
 
     private val chooseFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { importPlan(it) } }
 
@@ -50,6 +65,7 @@ class MainActivity : AppCompatActivity() {
         map = findViewById(R.id.map)
         setupMap()
         connectionStatus = findViewById(R.id.connectionStatus)
+        internetStatus = findViewById(R.id.internetStatus)
         selectionStatus = findViewById(R.id.selectionStatus)
         planStatus = findViewById(R.id.planStatus)
         uploadButton = findViewById(R.id.uploadButton)
@@ -60,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         startButton.setOnClickListener { flightPlan?.activate(FlightPlanPilotingItf.Interpreter.LEGACY, true) }
         stopButton.setOnClickListener { flightPlan?.stop() }
         groundSdk = ManagedGroundSdk.obtainSession(this)
+        updateInternetStatus()
     }
 
     private fun setupMap() {
@@ -82,6 +99,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        (getSystemService(ConnectivityManager::class.java)).registerDefaultNetworkCallback(networkCallback)
+        networkCallbackRegistered = true
+        updateInternetStatus()
         groundSdk.getFacility(AutoConnection::class.java) { auto ->
             auto ?: return@getFacility
             if (auto.status != AutoConnection.Status.STARTED) auto.start()
@@ -92,6 +112,20 @@ class MainActivity : AppCompatActivity() {
                 connectionStatus.text = drone?.let { "Connected to ${it.name}" } ?: "Looking for ANAFI USA…"
                 monitorFlightPlan()
             }
+        }
+    }
+
+    private fun updateInternetStatus() {
+        val manager = getSystemService(ConnectivityManager::class.java)
+        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork)
+        internetStatus.text = when {
+            capabilities == null -> "Internet: no active connection — satellite map cannot load"
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ->
+                "Internet: connected — satellite map should load"
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ->
+                "Internet: network found, but Android cannot verify internet access"
+            else -> "Internet: active network has no internet access"
         }
     }
 
@@ -131,11 +165,14 @@ class MainActivity : AppCompatActivity() {
     private fun drawMission(file: File) {
         val points = file.readLines().dropWhile { !it.startsWith("QGC WPL") }.drop(1).mapNotNull { line ->
             val parts = line.trim().split(Regex("\\s+"))
-            if (parts.size < 12) null else parts[8].toDoubleOrNull()?.let { lat -> parts[9].toDoubleOrNull()?.let { lon -> GeoPoint(lat, lon) } }
+            val isGeographicWaypoint = parts.size >= 12 && (parts[2] == "0" || parts[2] == "3")
+            if (!isGeographicWaypoint) null else parts[8].toDoubleOrNull()?.let { lat -> parts[9].toDoubleOrNull()?.let { lon ->
+                if (lat == 0.0 && lon == 0.0) null else GeoPoint(lat, lon)
+            } }
         }
         route.setPoints(points)
         if (points.isNotEmpty()) {
-            map.controller.setCenter(points.first()); map.controller.setZoom(17.0)
+            map.zoomToBoundingBox(BoundingBox.fromGeoPoints(points), true, 64)
             selectionStatus.text = "Selected: ${file.name} • ${points.size} map points"
         } else selectionStatus.text = "Selected: ${file.name} • no map waypoints found"
         map.invalidate()
@@ -143,6 +180,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         flightPlanRef?.close(); flightPlanRef = null; flightPlan = null
+        if (networkCallbackRegistered) {
+            getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback)
+            networkCallbackRegistered = false
+        }
         super.onStop()
     }
 
