@@ -21,7 +21,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.MyLocationNewOverlay
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import java.io.File
