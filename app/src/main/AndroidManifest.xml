@@ -6,7 +6,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <application android:allowBackup="false" android:label="ANAFI Plan Uploader" android:theme="@style/Theme.AnafiUploader">
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_mission_logo"
+        android:label="ANAFI Mission Planner"
+        android:roundIcon="@drawable/ic_mission_logo"
+        android:theme="@style/Theme.AnafiUploader">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

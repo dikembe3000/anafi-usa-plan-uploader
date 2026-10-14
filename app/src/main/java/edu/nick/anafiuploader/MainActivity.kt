@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var connectionStatus: TextView
     private lateinit var internetStatus: TextView
     private lateinit var selectionStatus: TextView
+    private lateinit var cameraStatus: TextView
     private lateinit var planStatus: TextView
     private lateinit var uploadButton: Button
     private lateinit var startButton: Button
@@ -79,6 +80,7 @@ class MainActivity : AppCompatActivity() {
         connectionStatus = findViewById(R.id.connectionStatus)
         internetStatus = findViewById(R.id.internetStatus)
         selectionStatus = findViewById(R.id.selectionStatus)
+        cameraStatus = findViewById(R.id.cameraStatus)
         planStatus = findViewById(R.id.planStatus)
         uploadButton = findViewById(R.id.uploadButton)
         startButton = findViewById(R.id.startButton)
@@ -124,9 +126,11 @@ class MainActivity : AppCompatActivity() {
                 flightPlan = null
                 drone = auto.drone
                 connectionStatus.text = drone?.let { "Drone detected: ${it.name} — checking link…" } ?: "Looking for ANAFI USA…"
-                monitorDroneState()
-                monitorFlightPlan()
             }
+            // The Android file picker pauses this activity. Recreate listeners when returning,
+            // even when GroundSDK is still reporting the same drone UID.
+            if (droneStateRef == null) monitorDroneState()
+            if (flightPlanRef == null) monitorFlightPlan()
         }
     }
 
@@ -189,19 +193,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun drawMission(file: File) {
-        val points = file.readLines().dropWhile { !it.startsWith("QGC WPL") }.drop(1).mapNotNull { line ->
+        val missionLines = file.readLines().dropWhile { !it.startsWith("QGC WPL") }.drop(1)
+        val points = missionLines.mapNotNull { line ->
             val parts = line.trim().split(Regex("\\s+"))
             val isGeographicWaypoint = parts.size >= 12 && (parts[2] == "0" || parts[2] == "3")
             if (!isGeographicWaypoint) null else parts[8].toDoubleOrNull()?.let { lat -> parts[9].toDoubleOrNull()?.let { lon ->
                 if (lat == 0.0 && lon == 0.0) null else GeoPoint(lat, lon)
             } }
         }
+        renderCameraSummary(missionLines)
         route.setPoints(points)
         if (points.isNotEmpty()) {
             map.zoomToBoundingBox(BoundingBox.fromGeoPoints(points), true, 64)
             selectionStatus.text = "Selected: ${file.name} • ${points.size} map points"
         } else selectionStatus.text = "Selected: ${file.name} • no map waypoints found"
         map.invalidate()
+    }
+
+    private fun renderCameraSummary(missionLines: List<String>) {
+        val cameraCommands = missionLines.mapNotNull { line ->
+            val fields = line.trim().split(Regex("\\s+"))
+            if (fields.size < 12) null else fields
+        }
+        val triggerDistances = cameraCommands.mapNotNull { fields ->
+            if (fields[3] == "206") fields[4].toDoubleOrNull()?.takeIf { it > 0.0 } else null
+        }
+        val hasCaptureMode = cameraCommands.any { it[3] == "50001" }
+        val hasCaptureAction = cameraCommands.any { it[3] == "2000" || it[3] == "2001" }
+        cameraStatus.text = when {
+            triggerDistances.isNotEmpty() -> {
+                val spacing = "%.2f".format(triggerDistances.first())
+                val mode = if (hasCaptureMode || hasCaptureAction) {
+                    " Camera capture commands are included."
+                } else {
+                    " Set the ANAFI camera's photo mode and image settings before starting."
+                }
+                "Mission camera: distance-triggered photos every $spacing m.$mode"
+            }
+            hasCaptureMode || hasCaptureAction -> "Mission camera: capture commands found in this MAVLink file."
+            else -> "Mission camera: no photo-trigger command found in this MAVLink file."
+        }
     }
 
     override fun onStop() {
