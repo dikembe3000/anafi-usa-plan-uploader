@@ -17,13 +17,15 @@ import androidx.core.app.ActivityCompat
 import com.parrot.drone.groundsdk.GroundSdk
 import com.parrot.drone.groundsdk.ManagedGroundSdk
 import com.parrot.drone.groundsdk.Ref
+import com.parrot.drone.groundsdk.device.DeviceState
 import com.parrot.drone.groundsdk.device.Drone
 import com.parrot.drone.groundsdk.device.pilotingitf.FlightPlanPilotingItf
 import com.parrot.drone.groundsdk.facility.AutoConnection
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
@@ -33,6 +35,7 @@ import java.io.File
 class MainActivity : AppCompatActivity() {
     private lateinit var groundSdk: GroundSdk
     private var drone: Drone? = null
+    private var droneStateRef: Ref<DeviceState>? = null
     private var flightPlanRef: Ref<FlightPlanPilotingItf>? = null
     private var flightPlan: FlightPlanPilotingItf? = null
     private var selectedPlan: File? = null
@@ -54,6 +57,15 @@ class MainActivity : AppCompatActivity() {
         override fun onLost(network: Network) {
             runOnUiThread { updateInternetStatus() }
         }
+    }
+
+    private val satelliteTiles = object : OnlineTileSourceBase(
+        "Esri World Imagery", 1, 19, 256, ".jpg",
+        arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/"), "Esri"
+    ) {
+        override fun getTileURLString(tileIndex: Long): String =
+            getBaseUrl() + MapTileIndex.getZoom(tileIndex) + "/" +
+                MapTileIndex.getY(tileIndex) + "/" + MapTileIndex.getX(tileIndex)
     }
 
     private val chooseFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { importPlan(it) } }
@@ -80,7 +92,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupMap() {
-        map.setTileSource(TileSourceFactory.MAPNIK)
+        // ArcGIS uses z/y/x ordering, unlike the z/x/y ordering used by OpenStreetMap tiles.
+        map.setTileSource(satelliteTiles)
         map.setMultiTouchControls(true)
         route = Polyline().apply { outlinePaint.color = Color.rgb(103, 58, 183); outlinePaint.strokeWidth = 7f }
         map.overlays.add(route)
@@ -107,10 +120,23 @@ class MainActivity : AppCompatActivity() {
             if (auto.status != AutoConnection.Status.STARTED) auto.start()
             if (drone?.uid != auto.drone?.uid) {
                 flightPlanRef?.close()
+                droneStateRef?.close()
                 flightPlan = null
                 drone = auto.drone
-                connectionStatus.text = drone?.let { "Connected to ${it.name}" } ?: "Looking for ANAFI USA…"
+                connectionStatus.text = drone?.let { "Drone detected: ${it.name} — checking link…" } ?: "Looking for ANAFI USA…"
+                monitorDroneState()
                 monitorFlightPlan()
+            }
+        }
+    }
+
+    private fun monitorDroneState() {
+        droneStateRef = drone?.getState { state ->
+            val name = drone?.name ?: "ANAFI USA"
+            connectionStatus.text = if (state?.connectionState == DeviceState.ConnectionState.CONNECTED) {
+                "Drone link: connected to $name"
+            } else {
+                "Drone link: ${state?.connectionState ?: "unavailable"} ($name)"
             }
         }
     }
@@ -122,7 +148,7 @@ class MainActivity : AppCompatActivity() {
             capabilities == null -> "Internet: no active connection — satellite map cannot load"
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ->
-                "Internet: connected — satellite map should load"
+                "Internet: connected — satellite imagery loading"
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ->
                 "Internet: network found, but Android cannot verify internet access"
             else -> "Internet: active network has no internet access"
@@ -180,6 +206,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         flightPlanRef?.close(); flightPlanRef = null; flightPlan = null
+        droneStateRef?.close(); droneStateRef = null
         if (networkCallbackRegistered) {
             getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback)
             networkCallbackRegistered = false
