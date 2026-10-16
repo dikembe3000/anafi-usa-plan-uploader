@@ -158,16 +158,16 @@ class MainActivity : AppCompatActivity() {
                 return@getInstrument
             }
             val verticalAccuracy = gps.verticalAccuracy
-                .takeIf { it.isPresent }
-                ?.asDouble
                 ?.let { "%.1f m".format(it) }
                 ?: "not reported"
             val horizontalAccuracy = gps.lastKnownLocation
                 ?.accuracy
                 ?.let { "%.1f m".format(it) }
                 ?: "not reported"
-            droneGpsStatus.text = "Drone GPS: fixed ${if (gps.isFixed) "yes" else "no"} • " +
-                "satellites ${gps.satelliteCount} • horizontal $horizontalAccuracy • vertical $verticalAccuracy"
+            val fixed = gps.fixed?.let { if (it) "yes" else "no" } ?: "unknown"
+            val satellites = gps.satelliteCount?.toString() ?: "not reported"
+            droneGpsStatus.text = "Drone GPS: fixed $fixed • " +
+                "satellites $satellites • horizontal $horizontalAccuracy • vertical $verticalAccuracy"
         }
     }
 
