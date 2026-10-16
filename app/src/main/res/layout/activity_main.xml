@@ -18,10 +18,12 @@
             </LinearLayout>
             <TextView android:id="@+id/connectionStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Looking for ANAFI USA…" android:textStyle="bold" />
             <TextView android:id="@+id/internetStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Internet: checking…" />
+            <TextView android:id="@+id/droneGpsStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Drone GPS: waiting for drone data…" />
             <TextView android:id="@+id/selectionStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="No MAVLink plan selected" />
             <TextView android:id="@+id/cameraStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Mission camera: select a MAVLink plan to inspect its camera actions." />
             <TextView android:id="@+id/planStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Waiting for the FlightPlan interface" />
             <Button android:id="@+id/selectButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Choose MAVLink File" />
+            <Button android:id="@+id/refreshStatusButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Refresh Drone Status" />
             <Button android:id="@+id/uploadButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:enabled="false" android:text="Upload to Drone" />
             <Button android:id="@+id/startButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:enabled="false" android:text="Start Flight Plan" />
             <Button android:id="@+id/stopButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:enabled="false" android:text="Stop Flight Plan" />

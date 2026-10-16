@@ -19,6 +19,7 @@ import com.parrot.drone.groundsdk.ManagedGroundSdk
 import com.parrot.drone.groundsdk.Ref
 import com.parrot.drone.groundsdk.device.DeviceState
 import com.parrot.drone.groundsdk.device.Drone
+import com.parrot.drone.groundsdk.device.instrument.Gps
 import com.parrot.drone.groundsdk.device.pilotingitf.FlightPlanPilotingItf
 import com.parrot.drone.groundsdk.facility.AutoConnection
 import org.osmdroid.config.Configuration
@@ -36,12 +37,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var groundSdk: GroundSdk
     private var drone: Drone? = null
     private var droneStateRef: Ref<DeviceState>? = null
+    private var droneGpsRef: Ref<Gps>? = null
     private var flightPlanRef: Ref<FlightPlanPilotingItf>? = null
     private var flightPlan: FlightPlanPilotingItf? = null
     private var selectedPlan: File? = null
     private lateinit var connectionStatus: TextView
     private lateinit var internetStatus: TextView
     private lateinit var selectionStatus: TextView
+    private lateinit var droneGpsStatus: TextView
     private lateinit var cameraStatus: TextView
     private lateinit var planStatus: TextView
     private lateinit var uploadButton: Button
@@ -80,12 +83,14 @@ class MainActivity : AppCompatActivity() {
         connectionStatus = findViewById(R.id.connectionStatus)
         internetStatus = findViewById(R.id.internetStatus)
         selectionStatus = findViewById(R.id.selectionStatus)
+        droneGpsStatus = findViewById(R.id.droneGpsStatus)
         cameraStatus = findViewById(R.id.cameraStatus)
         planStatus = findViewById(R.id.planStatus)
         uploadButton = findViewById(R.id.uploadButton)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
         findViewById<Button>(R.id.selectButton).setOnClickListener { chooseFile.launch(arrayOf("text/plain", "application/octet-stream", "*/*")) }
+        findViewById<Button>(R.id.refreshStatusButton).setOnClickListener { refreshDroneStatus() }
         uploadButton.setOnClickListener { selectedPlan?.let { flightPlan?.uploadFlightPlan(it) } }
         startButton.setOnClickListener { flightPlan?.activate(FlightPlanPilotingItf.Interpreter.LEGACY, true) }
         stopButton.setOnClickListener { flightPlan?.stop() }
@@ -130,6 +135,7 @@ class MainActivity : AppCompatActivity() {
             // The Android file picker pauses this activity. Recreate listeners when returning,
             // even when GroundSDK is still reporting the same drone UID.
             if (droneStateRef == null) monitorDroneState()
+            if (droneGpsRef == null) monitorDroneGps()
             if (flightPlanRef == null) monitorFlightPlan()
         }
     }
@@ -143,6 +149,35 @@ class MainActivity : AppCompatActivity() {
                 "Drone link: ${state?.connectionState ?: "unavailable"} ($name)"
             }
         }
+    }
+
+    private fun monitorDroneGps() {
+        droneGpsRef = drone?.getInstrument(Gps::class.java) { gps ->
+            if (gps == null) {
+                droneGpsStatus.text = "Drone GPS: instrument not available yet"
+                return@getInstrument
+            }
+            val verticalAccuracy = gps.verticalAccuracy
+                .takeIf { it.isPresent }
+                ?.asDouble
+                ?.let { "%.1f m".format(it) }
+                ?: "not reported"
+            val horizontalAccuracy = gps.lastKnownLocation
+                ?.accuracy
+                ?.let { "%.1f m".format(it) }
+                ?: "not reported"
+            droneGpsStatus.text = "Drone GPS: fixed ${if (gps.isFixed) "yes" else "no"} • " +
+                "satellites ${gps.satelliteCount} • horizontal $horizontalAccuracy • vertical $verticalAccuracy"
+        }
+    }
+
+    private fun refreshDroneStatus() {
+        droneGpsRef?.close(); droneGpsRef = null
+        flightPlanRef?.close(); flightPlanRef = null; flightPlan = null
+        droneGpsStatus.text = "Drone GPS: refreshing…"
+        planStatus.text = "Refreshing FlightPlan status…"
+        monitorDroneGps()
+        monitorFlightPlan()
     }
 
     private fun updateInternetStatus() {
@@ -238,6 +273,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         flightPlanRef?.close(); flightPlanRef = null; flightPlan = null
         droneStateRef?.close(); droneStateRef = null
+        droneGpsRef?.close(); droneGpsRef = null
         if (networkCallbackRegistered) {
             getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback)
             networkCallbackRegistered = false
